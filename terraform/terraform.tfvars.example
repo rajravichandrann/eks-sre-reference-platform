@@ -1,0 +1,19 @@
+aws_region  = "us-east-1"
+environment = "dev"
+
+# Replace with YOUR public IPv4 address in /32 form before applying.
+# Example documentation-only address below will not make your cluster reachable.
+cluster_public_access_cidrs = ["203.0.113.10/32"]
+
+# Cheap portfolio-lab mode. Set false to demonstrate NAT-per-AZ resilience.
+single_nat_gateway = true
+
+kubernetes_version = "1.35"
+
+node_instance_types = ["t3.medium"]
+node_capacity_type  = "ON_DEMAND"
+node_min_size       = 1
+node_desired_size   = 1
+node_max_size       = 4
+
+ecr_force_delete = true
