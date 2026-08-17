@@ -183,7 +183,7 @@ resource "aws_eks_node_group" "general" {
   }
 
   labels = {
-    workload = "general"
+    workload  = "general"
     lifecycle = lower(var.node_capacity_type)
   }
 
