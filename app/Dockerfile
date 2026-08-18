@@ -15,7 +15,7 @@ RUN useradd \
     --uid 10001 \
     appuser
 
-USER appuser
+USER 10001
 
 EXPOSE 8080
 
