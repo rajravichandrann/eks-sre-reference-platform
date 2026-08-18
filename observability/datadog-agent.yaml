@@ -1,0 +1,22 @@
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+
+metadata:
+  name: datadog
+  namespace: datadog
+
+spec:
+  global:
+    clusterName: eks-sre-reference-dev
+
+    site: datadoghq.com
+
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+
+    tags:
+      - env:dev
+      - project:eks-sre-reference-platform
+      - platform:eks

@@ -26,6 +26,24 @@ spec:
       labels:
         app: eks-sre-reference-app
 
+      annotations:
+        ad.datadoghq.com/app.checks: |
+          {
+            "openmetrics": {
+              "instances": [
+                {
+                  "openmetrics_endpoint": "http://%%host%%:%%port%%/metrics",
+                  "namespace": "eks_sre_reference",
+                  "metrics": [
+                    "http_requests",
+                    "http_request_duration_seconds"
+                  ],
+                  "collect_counters_with_distributions": true
+                }
+              ]
+            }
+          }
+
     spec:
       terminationGracePeriodSeconds: 30
 
