@@ -1,132 +1,287 @@
-# eks-sre-reference-platform
+# EKS SRE Reference Platform
 
-A public reference platform for demonstrating production-oriented AWS EKS, Terraform, CI/CD, observability, autoscaling, load testing, and SRE failure experimentation.
+A hands-on AWS EKS reference platform demonstrating infrastructure engineering, Kubernetes reliability, secure CI/CD, observability, and SRE practices.
 
-## Roadmap
+I built this project as a working environment for exploring not only how to deploy infrastructure, but how to operate it: identity, deployment safety, application health, telemetry, failure modes, and production trade-offs.
 
-### Phase 1 — Infrastructure foundation
-- VPC across two Availability Zones
-- Public subnets for internet-facing load balancers / NAT
-- Private subnets for EKS worker nodes
-- Configurable single-NAT (lab) vs NAT-per-AZ (HA) design
+## What I Have Implemented
+
+### AWS and Terraform
+
+- Terraform-managed AWS infrastructure
+- VPC spanning two Availability Zones
+- Public and private subnets
+- Private EKS worker nodes
+- Configurable single-NAT lab design or NAT-per-AZ design
 - Amazon EKS managed control plane
-- EKS managed node group using Amazon Linux 2023
-- EKS control-plane logs
-- KMS envelope encryption for Kubernetes Secrets
-- EKS API authentication mode
-- ECR repositories with immutable tags, scanning, and lifecycle policies
+- EKS managed node group
+- KMS encryption for Kubernetes Secrets
+- EKS control-plane logging
+- ECR with immutable image tags and image scanning
+- S3 remote Terraform state with native state locking
 
-### Phase 2 — Identity and CI
-- GitHub Actions OIDC -> AWS STS
-- Least-privilege deploy roles
-- EKS access entries
-- IRSA for the VPC CNI and platform workloads
-- Docker Buildx / BuildKit
+### GitHub Actions and CI/CD
 
-### Phase 3 — Application delivery
-- Sample application
-- Kubernetes manifests / Helm
-- ALB ingress
-- readiness / liveness / startup probes
-- requests / limits / disruption budgets
+- GitHub Actions OIDC federation to AWS
+- AWS STS temporary credentials instead of stored AWS access keys
+- Terraform format, validation, init, and plan workflow
+- Docker Buildx / BuildKit image builds
+- GitHub Actions BuildKit cache
+- Images pushed to ECR using immutable Git SHA tags
 
-### Phase 4 — Observability
-- Datadog agent
-- OpenMetrics
-- CI Visibility
-- dashboards, monitors, logs, traces
-- SLIs / SLOs / error budgets
+### Kubernetes Reliability
 
-### Phase 5 — Scaling and SRE experiments
-- HPA
-- cluster autoscaling / Karpenter comparison
-- load testing
-- node pressure
-- pod eviction
-- dependency latency / failures
-- insufficient capacity experiments
-- SLO burn-rate alerts
+- Two application replicas
+- Rolling deployments
+- `maxUnavailable: 0`
+- `maxSurge: 1`
+- Startup probes
+- Readiness probes
+- Liveness probes
+- CPU and memory requests / limits
+- PodDisruptionBudget
+- Non-root containers
+- Read-only root filesystem
+- Linux capabilities dropped
+- Privilege escalation disabled
+- RuntimeDefault seccomp profile
 
-## Phase 1 architecture
+### Application Observability
+
+The reference application is a small FastAPI service instrumented using the Prometheus Python client.
+
+It exposes:
 
 ```text
-                        Internet
-                           |
-                    Internet Gateway
-                           |
-              +------------+------------+
-              |                         |
-       public subnet A             public subnet B
-              |                         |
-           NAT GW A               (NAT GW B in HA mode)
-              |                         |
-              +------------+------------+
-                           |
-              private subnet A     private subnet B
-                    |                    |
-                    +---- EKS nodes -----+
-                           |
-                     EKS control plane
-                           |
-                          ECR
+/healthz
+/readyz
+/work
+/metrics
 ```
 
-The default lab configuration uses a single NAT gateway to keep cost down. Set `single_nat_gateway = false` for a NAT gateway per Availability Zone and better egress resilience.
-
-## Prerequisites
-
-- Terraform >= 1.8
-- AWS CLI authenticated to a sandbox AWS account
-- kubectl
-- permissions to create VPC, IAM, KMS, EKS, EC2, CloudWatch Logs, and ECR resources
-
-## Deploy Phase 1
+The `/work` endpoint supports intentional latency and failures so reliability behavior can be tested:
 
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
+curl localhost:8080/work
+
+curl "localhost:8080/work?delay_ms=500"
+
+curl -i "localhost:8080/work?fail=true"
 ```
 
-Edit `terraform.tfvars`, especially `cluster_public_access_cidrs`. Use your public IPv4 address as a `/32` instead of allowing the entire internet.
+Application metrics include:
+
+- request count
+- HTTP status
+- request latency histogram
+
+Health checks and monitoring traffic are excluded from the application metrics so probes do not distort user-facing reliability measurements.
+
+## Observability Architecture
+
+This project does not run a Prometheus server.
+
+The application uses the Prometheus client library to expose Prometheus/OpenMetrics-compatible metrics. The Datadog Agent discovers the workload and scrapes `/metrics` using the Datadog OpenMetrics integration.
+
+```text
+FastAPI
+   |
+   | Counter + Histogram
+   v
+Prometheus Python Client
+   |
+   v
+/metrics
+   |
+   | Prometheus/OpenMetrics format
+   v
+Datadog Agent
+   |
+   | OpenMetrics integration
+   v
+Datadog
+```
+
+Current Datadog application metrics include:
+
+```text
+eks_sre_reference.http_requests.count
+
+eks_sre_reference.http_request_duration_seconds
+
+eks_sre_reference.http_request_duration_seconds.count
+
+eks_sre_reference.http_request_duration_seconds.sum
+```
+
+## Platform Architecture
+
+```text
+                         GitHub
+                            |
+                      GitHub Actions
+                            |
+                       OIDC token
+                            |
+                            v
+                         AWS STS
+                            |
+                +-----------+-----------+
+                |                       |
+            Terraform                 Buildx
+                |                       |
+                v                       v
+        AWS Infrastructure             ECR
+                |                       |
+                |                       |
+                +----------+------------+
+                           |
+                           v
+                          EKS
+                           |
+                   Kubernetes Pods
+                           |
+                        FastAPI
+                           |
+                       /metrics
+                           |
+                    Datadog Agent
+                           |
+                           v
+                        Datadog
+```
+
+## Reliability Scenario: Failed Rolling Deployment
+
+During Kubernetes workload hardening, a replacement Pod failed with:
+
+```text
+CreateContainerConfigError
+```
+
+I investigated the Pod using:
 
 ```bash
-terraform init
-terraform fmt -recursive
-terraform validate
-terraform plan -out=phase1.tfplan
-terraform apply phase1.tfplan
+kubectl describe pod
 ```
 
-Configure kubectl:
+The Events showed that `runAsNonRoot` could not verify the container's non-numeric Docker user.
 
-```bash
-aws eks update-kubeconfig \
-  --region us-east-1 \
-  --name eks-sre-reference-dev
+The image created a user named:
 
-kubectl get nodes -o wide
-kubectl get pods -A
+```text
+appuser
 ```
 
-## Destroy when you are done
+with UID `10001`, but Kubernetes could not infer from the username that the process was non-root.
 
-This lab incurs hourly AWS charges, especially for EKS, EC2, and NAT Gateway resources.
+I fixed the problem by explicitly configuring:
 
-```bash
-terraform destroy
+```yaml
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
 ```
 
-## Phase 1 design decisions worth discussing in an interview
+The rolling deployment configuration was:
 
-1. **Private worker nodes.** Nodes do not need public IPv4 addresses; outbound access goes through NAT.
-2. **Two Availability Zones.** The network is multi-AZ even though the cheap lab configuration can intentionally run only one worker node.
-3. **Single NAT by default.** This is a cost optimization for a portfolio lab, not the HA production choice. The VPC module can switch to one NAT per AZ.
-4. **Managed node groups instead of EKS Auto Mode.** Later phases intentionally expose node scaling, scheduling, and capacity behavior for SRE experiments.
-5. **Restricted public EKS endpoint plus private endpoint.** Local administration is possible without exposing the API server to every address.
-6. **EKS access API mode.** This prepares the repo for access entries rather than centering the legacy `aws-auth` ConfigMap.
-7. **Control-plane logs enabled.** API, audit, authenticator, controller-manager, and scheduler signals are available for operational exercises.
-8. **KMS encryption for Kubernetes Secrets.** The platform makes encryption an explicit design decision.
-9. **IMDSv2 on nodes.** The launch template requires metadata tokens.
-10. **Temporary CNI permission trade-off.** Phase 1 places `AmazonEKS_CNI_Policy` on the node role for bootstrap simplicity. Phase 2 will move it to IRSA and remove it from the node role.
-11. **ECR immutable tags.** CI will publish unique image tags/digests instead of silently replacing deployed artifacts.
-12. **No remote Terraform backend yet.** Backend bootstrap and CI ownership of Terraform state will be added with the GitHub OIDC phase rather than hiding a manual prerequisite.
+```yaml
+rollingUpdate:
+  maxUnavailable: 0
+  maxSurge: 1
+```
+
+Because of that configuration, Kubernetes kept the existing healthy replicas running while the replacement Pod failed.
+
+This demonstrated both a debugging workflow and the value of safe rollout controls.
+
+## Important Design Trade-offs
+
+This is a cost-controlled reference environment, not a claim that a single-node lab is a production HA architecture.
+
+| Current Lab Design | Production Evolution |
+|---|---|
+| One worker node by default | Multiple nodes distributed across Availability Zones |
+| Two Pods can share one node | Topology spread / pod anti-affinity across nodes |
+| Single NAT gateway | NAT per AZ or another resilient egress design |
+| ClusterIP + port-forward | ALB / Ingress, DNS, and TLS |
+| Restricted public EKS API | Private administrative access path |
+| Shared CI AWS role | Separate least-privilege Terraform, build, and deploy roles |
+| Kubernetes Secret for Datadog key | AWS Secrets Manager / External Secrets |
+| VPC CNI permissions on node role | Dedicated pod identity / IRSA |
+
+The Terraform node group currently supports:
+
+```text
+minimum: 1
+desired: 1
+maximum: 4
+```
+
+This allows later autoscaling exercises without Terraform continuously resetting the autoscaler's desired node count.
+
+## Repository Structure
+
+```text
+.
+├── .github/workflows/
+│   ├── terraform.yaml
+│   └── build_image.yaml
+│
+├── app/
+│   ├── Dockerfile
+│   ├── main.py
+│   └── requirements.txt
+│
+├── k8s/
+│   └── app.yaml
+│
+├── observability/
+│   └── datadog-agent.yaml
+│
+└── terraform/
+    ├── bootstrap/
+    ├── modules/
+    │   ├── vpc/
+    │   ├── eks/
+    │   └── ecr/
+    ├── backend.tf
+    └── main.tf
+```
+
+## What I Am Building Next
+
+The next stages build on the telemetry and reliability controls already implemented:
+
+- Datadog request-rate dashboard
+- HTTP 5xx error-rate dashboard
+- p95 / p99 latency
+- Availability and latency SLIs
+- SLOs and error budgets
+- SLO burn-rate alerting
+- Horizontal Pod Autoscaling
+- EKS node autoscaling
+- k6 load testing
+- Capacity exhaustion testing
+- Pod and node failure experiments
+- Dependency latency and failure injection
+- GitHub Actions CI Visibility
+- OpenTelemetry tracing
+
+## Purpose of the Project
+
+The goal of this repository is to make SRE engineering decisions visible and testable.
+
+Examples include:
+
+- Which identity is actually making an AWS API call?
+- How should GitHub Actions authenticate to AWS without static credentials?
+- What happens when a Kubernetes rollout fails halfway through?
+- What is the difference between startup, readiness, and liveness probes?
+- What does a PodDisruptionBudget protect against?
+- Why do two replicas on one node not provide node-level high availability?
+- How should application availability and latency be measured?
+- How do Prometheus metrics become Datadog metrics through OpenMetrics?
+- What would need to change before this architecture was used for a production workload?
+
+The infrastructure is the implementation; understanding and testing reliability behavior is the main purpose of the project.
