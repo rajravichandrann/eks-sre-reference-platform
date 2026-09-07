@@ -12,7 +12,7 @@ from prometheus_client import (
 
 app = FastAPI(
     title="EKS SRE Reference App",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 APP_VERSION = os.getenv("APP_VERSION", "local")
@@ -41,6 +41,19 @@ HTTP_REQUEST_DURATION = Histogram(
         5.0,
     ),
 )
+
+
+def burn_cpu(duration_ms: int) -> int:
+    """Perform deterministic CPU work for approximately duration_ms."""
+    deadline = time.perf_counter() + (duration_ms / 1000)
+    value = 0
+    iterations = 0
+
+    while time.perf_counter() < deadline:
+        value = ((value * 1664525) + 1013904223) & 0xFFFFFFFF
+        iterations += 1
+
+    return iterations
 
 
 @app.middleware("http")
@@ -107,9 +120,25 @@ def readiness():
 
 
 @app.get("/work")
-def work(delay_ms: int = 0, fail: bool = False):
+def work(delay_ms: int = 0, cpu_ms: int = 0, fail: bool = False):
+    if delay_ms < 0 or cpu_ms < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="delay_ms and cpu_ms must be non-negative",
+        )
+
+    if delay_ms > 5000 or cpu_ms > 5000:
+        raise HTTPException(
+            status_code=400,
+            detail="delay_ms and cpu_ms are capped at 5000 for this lab",
+        )
+
     if delay_ms > 0:
         time.sleep(delay_ms / 1000)
+
+    cpu_iterations = 0
+    if cpu_ms > 0:
+        cpu_iterations = burn_cpu(cpu_ms)
 
     if fail:
         raise HTTPException(
@@ -120,6 +149,8 @@ def work(delay_ms: int = 0, fail: bool = False):
     return {
         "status": "success",
         "delay_ms": delay_ms,
+        "cpu_ms": cpu_ms,
+        "cpu_iterations": cpu_iterations,
     }
 
 
