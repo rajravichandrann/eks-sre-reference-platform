@@ -478,18 +478,30 @@ This provides traceability from a deployed container image back to the source co
     └── main.tf
 ```
 
+
+## Compute Capacity and Placement Experiments
+
+The repository now includes reproducible experiments for the compute behavior underneath the service, not only application reliability:
+
+- `sre-experiments/compute-capacity-placement.md` — capacity exhaustion, scheduler diagnostics, node-capacity expansion, and node-drain recovery
+- `k8s/capacity-pressure.yaml` — deterministic scheduling pressure using CPU resource requests
+- `k8s/hpa.yaml` — CPU-based Horizontal Pod Autoscaling
+- `load-tests/hpa.js` — k6 workload for controlled HPA testing
+- `/work?cpu_ms=<n>` — bounded CPU work in the reference application for scaling experiments
+
+The experiments intentionally separate pod scaling from node capacity. A deployment can request more replicas while the scheduler has insufficient capacity to place them; the lab makes that failure mode observable through Pending pods, scheduler events, node readiness, and application telemetry.
+
+The current pre-submission version uses controlled node-group desired-capacity changes for the node-capacity experiment. A follow-on iteration will replace that manual step with Karpenter or Kubernetes Cluster Autoscaler and measure the complete unschedulable-pod-to-node-ready path.
+
+
 ## What I Am Building Next
 
 The next stages build on the telemetry and reliability controls already implemented:
 
 - SLO burn-rate alerting
 - latency SLI and SLO
-- Horizontal Pod Autoscaling
 - EKS node autoscaling
-- k6 load testing
-- capacity exhaustion testing
 - pod failure experiments
-- node failure experiments
 - dependency latency and failure injection
 - GitHub Actions CI Visibility
 - OpenTelemetry tracing
