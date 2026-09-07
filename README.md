@@ -491,7 +491,7 @@ The repository now includes reproducible experiments for the compute behavior un
 
 The experiments intentionally separate pod scaling from node capacity. A deployment can request more replicas while the scheduler has insufficient capacity to place them; the lab makes that failure mode observable through Pending pods, scheduler events, node readiness, and application telemetry.
 
-The current pre-submission implementation uses controlled node-group desired-capacity changes for the node-capacity experiment. A follow-on iteration will replace that manual step with Karpenter or Kubernetes Cluster Autoscaler and measure the complete unschedulable-pod-to-node-ready path.
+The current implementation uses controlled node-group desired-capacity changes for the node-capacity experiment. A follow-on iteration will replace that manual step with Karpenter or Kubernetes Cluster Autoscaler and measure the complete unschedulable-pod-to-node-ready path.
 
 
 ## What I Am Building Next
