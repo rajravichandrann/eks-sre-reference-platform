@@ -5,6 +5,7 @@ locals {
   github_repository_id = "1336229988"
 
   github_main_subject = "repo:${local.github_owner}@${local.github_owner_id}/${local.github_repository}@${local.github_repository_id}:ref:refs/heads/main"
+  github_gitops_subject = "repo:${local.github_owner}@${local.github_owner_id}/${local.github_repository}@${local.github_repository_id}:ref:refs/heads/gitops"
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -47,7 +48,8 @@ data "aws_iam_policy_document" "github_terraform_assume_role" {
       variable = "token.actions.githubusercontent.com:sub"
 
       values = [
-        local.github_main_subject
+        local.github_main_subject,
+        local.github_gitops_subject
       ]
     }
   }
