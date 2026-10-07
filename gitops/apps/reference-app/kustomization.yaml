@@ -4,4 +4,4 @@ kind: Kustomization
 resources:
   - app.yaml
   - hpa.yaml
-  - test-configmap.yaml
+  # - test-configmap.yaml
