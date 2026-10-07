@@ -18,6 +18,6 @@ spec:
     namespace: default
   
   syncPolicy:
-  automated:
-    prune: false
-    selfHeal: true
+    automated:
+      prune: false
+      selfHeal: true
