@@ -6,6 +6,10 @@ metadata:
 
 spec:
   project: default
+  syncPolicy:
+  automated:
+    prune: false
+    selfHeal: true
 
   source:
     repoURL: https://github.com/rajravichandrann/eks-sre-reference-platform.git
