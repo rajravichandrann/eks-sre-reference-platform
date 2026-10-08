@@ -57,7 +57,7 @@ spec:
 
       containers:
         - name: app
-          image: 865952398288.dkr.ecr.us-east-1.amazonaws.com/eks-sre-reference-app:sha-693119f219379680e275d0b6b25e70cf48ac3f52
+          image: 865952398288.dkr.ecr.us-east-1.amazonaws.com/eks-sre-reference-app:sha-693119f12789798696747
           imagePullPolicy: IfNotPresent
 
           ports:
@@ -66,7 +66,7 @@ spec:
 
           env:
             - name: APP_VERSION
-              value: "sha-693119f219379680e275d0b6b25e70cf48ac3f52"
+              value: "sha-693119f12789798696747"
 
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
