@@ -1,5 +1,5 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: eks-sre-reference-app
   labels:
@@ -12,10 +12,12 @@ spec:
   progressDeadlineSeconds: 120
 
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+    blueGreen:
+      activeService: eks-sre-reference-app
+      previewService: eks-sre-reference-app-preview
+      autoPromotionEnabled: false
+      previewReplicaCount: 1
+      scaleDownDelaySeconds: 30
 
   selector:
     matchLabels:
@@ -128,6 +130,23 @@ spec:
 
   type: ClusterIP
 
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eks-sre-reference-app-preview
+
+spec:
+  selector:
+    app: eks-sre-reference-app
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+  type: ClusterIP
+  
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
