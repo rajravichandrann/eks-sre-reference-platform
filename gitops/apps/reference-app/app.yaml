@@ -6,18 +6,19 @@ metadata:
     app: eks-sre-reference-app
 
 spec:
-  replicas: 2
+  replicas: 5
 
   minReadySeconds: 5
   progressDeadlineSeconds: 120
 
   strategy:
-    blueGreen:
-      activeService: eks-sre-reference-app
-      previewService: eks-sre-reference-app-preview
-      autoPromotionEnabled: false
-      previewReplicaCount: 1
-      scaleDownDelaySeconds: 30
+    canary:
+      steps:
+        - setWeight: 20
+        - pause: {}
+        - setWeight: 50
+        - pause: {}
+        - setWeight: 100
 
   selector:
     matchLabels:
@@ -131,21 +132,21 @@ spec:
   type: ClusterIP
 
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: eks-sre-reference-app-preview
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: eks-sre-reference-app-preview
 
-spec:
-  selector:
-    app: eks-sre-reference-app
+# spec:
+#   selector:
+#     app: eks-sre-reference-app
 
-  ports:
-    - name: http
-      port: 80
-      targetPort: http
+#   ports:
+#     - name: http
+#       port: 80
+#       targetPort: http
 
-  type: ClusterIP
+#   type: ClusterIP
 
 ---
 apiVersion: policy/v1

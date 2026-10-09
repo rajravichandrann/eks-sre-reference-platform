@@ -7,7 +7,7 @@ spec:
     apiVersion: argoproj.io/v1alpha1
     kind: Rollout
     name: eks-sre-reference-app
-  minReplicas: 2
+  minReplicas: 5
   maxReplicas: 10
   behavior:
     scaleUp:
