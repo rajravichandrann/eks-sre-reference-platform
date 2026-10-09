@@ -69,7 +69,7 @@ spec:
 
           env:
             - name: APP_VERSION
-              value: "bluegreen-v2"
+              value: "canary-v2"
 
             - name: PYTHONDONTWRITEBYTECODE
               value: "1"
